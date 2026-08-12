@@ -1,16 +1,11 @@
 # RNA-seq Analysis Pipeline (HISAT2 · StringTie · edgeR)
 
 Bulk RNA-seq(paired-end short read) 데이터를 대상으로 한
-QC → 트리밍 → 오염 스크리닝 → 정렬 → strand 판별 → 중복률 QC → 정량 →
-차등발현/클러스터링까지 이어지는 파이프라인입니다. 특정 종/샘플에
+QC → Trimming → Contamination Screening → Mapping → strand 판별 → Duplicate QC → Quantification & Normalization →
+DEG/Clustering까지 이어지는 파이프라인입니다. 특정 종/샘플에
 종속되지 않도록 작성되어, reference genome/GTF와 `samples.txt`만
 바꾸면 다른 프로젝트에도 재사용할 수 있습니다. bash 기반 stage/module
-스크립트를 순서대로 실행하는 구조이며, Snakemake/Nextflow 같은
-워크플로 매니저는 사용하지 않습니다.
-
-> **현재 상태**: Stage 1~6(QC~정렬~strand 판별~dupRadar)과
-> `modules/`(StringTie 정량~edgeR 차등발현~클러스터링)이 콩(Glycine max)
-> 12품종 × 3 반복(36샘플) 프로젝트에서 처음부터 끝까지 실행 검증되었습니다.
+스크립트를 순서대로 실행하는 구조입니다.
 
 ## 파이프라인 구조
 
@@ -118,7 +113,7 @@ cd <repo-name>
 - `scripts/config.sh.example` → `scripts/config.sh` 복사 (이미 있으면 건드리지 않음)
 - **최초 생성 시** `conda info --base`로 `CONDA_SH` 값을 자동 감지해서 채움
 - conda/fastqc/hisat2/stringtie 등 필수 프로그램 및 `qc_tools_env`/`dupradar_env`/
-  `trinity_env` conda env 존재 여부 확인
+  `RNAseq` conda env 존재 여부 확인
 - 다음 단계(경로 수정, reference 준비) 안내 출력
 
 이후 `scripts/config.sh`를 열어 `PROJECT_DIR`, `REF_DIR`,
@@ -127,8 +122,7 @@ cd <repo-name>
 프로젝트에 맞게 수정하면, 다른 스크립트들은 전부 이 `config.sh` 하나만
 보고 동작합니다 (하드코딩된 경로 없음). **`CONDA_SH`는 자동으로
 채워지지만, 값이 제대로 들어갔는지 직접 한 번 확인하는 것을
-권장합니다** (`grep "CONDA_SH=" scripts/config.sh`) — 관련 문제는
-[트러블슈팅](#configsh의-conda_sh-관련-자주-겪는-실수) 참고.
+권장합니다** (`grep "CONDA_SH=" scripts/config.sh`)
 
 ### 1. 사전 준비 (reference 파일 실체 생성 + 샘플 매핑)
 
