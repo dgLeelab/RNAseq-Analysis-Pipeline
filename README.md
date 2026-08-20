@@ -12,7 +12,8 @@ DEG/Clustering까지 이어지는 파이프라인입니다. 특정 종/샘플에
 ```
 [사전준비, 1회성]
   scripts/list_raw_prefixes.sh          raw fastq 파일명 -> sample_map.tsv 뼈대 생성
-  scripts/setup_screen_references.sh    FastQ Screen용 오염 참조(rRNA/E.coli/PhiX/Human) index 구축
+  scripts/setup_screen_references.sh    FastQ Screen용 오염 참조(rRNA/E.coli/PhiX/Human) index 구축 
+                                        # 데이터가 이미 있다면 복사해서 사용
 
 [stage 1] FastQC + MultiQC              (raw read QC)
      |  00_raw/*.fastq.gz
@@ -26,7 +27,7 @@ DEG/Clustering까지 이어지는 파이프라인입니다. 특정 종/샘플에
      |  04_hisat2/{sample}.sorted.bam
      v
 [stage 5] RSeQC + strand 자동판별       (infer_experiment / read_distribution / geneBody_coverage)
-     |  results/strand_info.sh 생성 (이후 단계가 자동으로 읽어감)
+     |  results/strand_info.sh 생성 (이후 단계가 자동으로 읽어감, geneBody는 매우 오래걸림)
      v
 [stage 6] samtools markdup + dupRadar   (중복률 QC, PCR bias vs 발현량 기반 dup 구분)
      v
@@ -129,7 +130,7 @@ cd <repo-name>
 `config.sh`에 `REF_GENOME_FA`, `REF_GTF`, `HISAT2_INDEX_PREFIX`,
 `RSEQC_BED`, `FASTQ_SCREEN_CONF` 등의 **경로를 적어두는 것과, 그 경로에
 실제 파일이 존재하는 것은 별개**입니다. `REF_GENOME_FA`, `REF_GTF`는
-직접 준비(다운로드 등)해야 하고, 나머지(index, bed, conf 파일)는 아래
+직접 다운로드해야 하고, 나머지(index, bed, conf 파일)는 아래
 순서대로 명령어를 실행해야 생성됩니다. 이 단계를 건너뛰고 바로
 `run_pipeline.sh`를 실행하면 실패합니다.
 
@@ -159,7 +160,8 @@ conda deactivate
 
 `config.sh`를 자동으로 읽어서 target genome bowtie2 index와
 rRNA/EColi/PhiX/Human index를 모두 구축하고 `fastq_screen.conf`까지
-자동 생성합니다 (1회성, Human 포함 시 용량/시간이 꽤 큽니다):
+자동 생성합니다 (1회성, Human 포함 시 용량/시간이 꽤 큽니다) 기존 데이터가
+있는 경우 복사해서 사용해도 됩니다.:
 ```bash
 ./setup_screen_references.sh
 ```
@@ -175,8 +177,8 @@ rRNA/EColi/PhiX/Human index를 모두 구축하고 `fastq_screen.conf`까지
 매핑을 채워 넣습니다. 샘플 개수나 조건/반복 구성에는 제약이 없습니다.
 
 **작은 테스트 데이터로 위 과정을 한 번에 자동 검증하고 싶다면**
-`test_data/run_smoke_test.sh`를 사용하세요 — 1~4번을 전부 자동으로
-처리하고 Stage 1~6까지 실행합니다 ([테스트 데이터](#테스트-데이터) 참고).
+`test_data/run_smoke_test.sh`를 사용하세요 — 1-4번을 전부 자동으로
+처리하고 Stage 1-6까지 실행합니다 ([테스트 데이터](#테스트-데이터) 참고).
 
 ### 2. Stage 1~6 실행
 
@@ -198,72 +200,57 @@ Stage 5(RSeQC)가 첫 번째 유효 샘플의 `infer_experiment.py` 결과를 �
 strand(unstranded/forward/reverse)를 자동 판별해서
 `results/strand_info.sh`에 저장합니다. Stage 4(HISAT2)와
 `modules/module04_stringtie.sh`는 이 파일이 있으면 자동으로 읽어서
-`--rna-strandness`, `--fr`/`--rf` 옵션을 적용합니다 (하드코딩 불필요).
+`--rna-strandness`, `--fr`/`--rf` 옵션을 적용합니다.
 
 ### 4. modules/ — 정량 및 DE 분석
 
 **주의**: 아래 module 스크립트들은 `modules/` 디렉토리 안이 아니라,
-**정량 작업용 디렉토리**(StringTie가 샘플별 하위폴더를 만들 위치, 예:
-`results/07_stringtie/`)에서 실행해야 합니다. `modules/`로 `cd`해서
-실행하면 결과 폴더가 `modules/` 안에 잘못 생성됩니다. 아래 예시는
-`results/07_stringtie/`에서 실행하는 기준이며, `modules/`까지의
-상대경로는 `../../../modules/`입니다 (repo 루트 아래
-`scripts/`, `modules/`와 나란히 `test_data/` 등이 있고, 그 아래
-`results/07_stringtie/`가 있는 구조 기준 — `PROJECT_DIR`을 repo
-바깥에 두는 등 구조가 다르면 경로 깊이도 달라지니, 실제로 실행하기
-전에 아래로 파일이 보이는지 먼저 확인하세요):
-```bash
-ls ../../../modules/module00_prep_annotation.sh
-```
+**작업용 디렉토리**에서 실행해야 합니다. 아래 예시는`results/07_stringtie/`에서 
+실행하는 기준입니다. 실제로 실행하기 전에 정확한 경로 확인이 필요합니다.
 
 ```bash
 mkdir -p <PROJECT_DIR>/results/07_stringtie   # 정량 작업 디렉토리 (이름은 자유, 이 예시는 07_stringtie)
 cd <PROJECT_DIR>/results/07_stringtie
 
 # 0) annotation 전처리 (organelle trans-splicing 유전자 등 문제 해결)
-"../../../modules/module00_prep_annotation.sh" \
-    /path/to/genomic.gff nuclear_annotation.gff \
-    NC_007942.1 NC_020455.1   # chloroplast, mitochondria (예시, 프로젝트마다 확인)
+bash modules/module00_prep_annotation.sh genome.gff nuclear_annotation.gff cp_genome mt_genome
+ex) NC_007942.1 NC_020455.1 # chloroplast, mitochondria
 
 # 1) StringTie 정량 (현재 디렉토리에 샘플별 하위폴더 생성, config.sh 자동 인식)
-"../../../modules/module04_stringtie.sh" nuclear_annotation.gff
+bash modules/module04_stringtie.sh nuclear_annotation.gff
 
 # 폴더명(= matrix 컬럼명 = samples.file 그룹 라벨) 오타 확인 — 가장 먼저 잡을 것
-"../../../modules/module00b_check_folder_names.sh"
+bash modules/module00b_check_folder_names.sh
 
 # 2) count matrix
-"../../../modules/run_module05.sh"
+bash modules/run_module05.sh
 
 # 3) TPM matrix
-python3 "../../../modules/module06_TPM_Extraction.py" expression.TPM.matrix
+python3 modules/module06_TPM_Extraction.py expression.TPM.matrix
 
 # 4) gene_id -> LOC 매핑표
-"../../../modules/module07_generate_loc_mapping.sh" nuclear_annotation.gff gene_id2loc.tsv
+bash modules/module07_generate_loc_mapping.sh nuclear_annotation.gff gene_id2loc.tsv
 
 # 5) count/TPM matrix를 LOC 식별자로 치환
-"../../../modules/run_loc_conversion.sh" gene_id2loc.tsv gene_count_matrix.csv expression.TPM.matrix
+bash modules/run_loc_conversion.sh gene_id2loc.tsv gene_count_matrix.csv expression.TPM.matrix
 
 # 6) TMM normalization (Trinity 유틸리티, trinity_env 활성화 필요)
-#    주의: 반드시 raw count matrix(genes.counts.matrix)를 입력으로 써야 합니다.
-#    이미 정규화된 TPM matrix를 넣으면 lib.size가 모든 샘플에서 동일(1e6)해져
-#    TMM 계수가 왜곡됩니다 (자세한 내용은 트러블슈팅 절 참고).
-conda activate trinity_env
+#    반드시 raw count matrix(genes.counts.matrix)를 입력으로 써야 합니다.
+conda activate RNAseq # 서버에 맞는 conda 환경 activate
 "../../../modules/module08_TMM_normalization.sh" genes.counts.matrix
 
 # 7) samples.file 생성 (matrix 헤더 기준, 정확한 컬럼명 매칭 보장)
-"../../../modules/generate_samples_file.sh" genes.counts.matrix samples.file
+bash modules/generate_samples_file.sh genes.counts.matrix samples.file
 
 # 8) module09_matrix_process.sh: PtR + edgeR DE + 클러스터링
 #    P/C(pvalue, fold change) 값을 바꿔가며 여러 번 재실행하는 경우가 많음.
 #    재실행마다 이전 결과(edgeR*, diffExpr.*, *.DE_results 등)가 섞일 수 있으니
 #    threshold별로 결과를 구분해서 보관하는 걸 권장:
-#      mkdir -p runs/P1e-3_C2 && bash ../../../modules/module09_matrix_process.sh -P 1e-3 -C 2 \
-#        && mv module09_*.log diffExpr.* clusters_fixed* *.DE_results edgeR* runs/P1e-3_C2/ 2>/dev/null
 export R_ENVIRON_USER=/dev/null
-"../../../modules/module09_matrix_process.sh" -P 1e-3 -C 2
+bash modules/module09_matrix_process.sh -P 1e-3 -C 2
 
 # 9) module_validate.sh: 최종 검증 (4가지 핵심 체크)
-"../../../modules/module_validate.sh" genes.counts.matrix expression.TMM.matrix samples.file
+bash modules/module_validate.sh genes.counts.matrix expression.TMM.matrix samples.file
 ```
 
 전체 흐름을 한 번에 보고 싶다면 `run_all_modules.sh`를 참고하세요
@@ -411,17 +398,6 @@ normalized!)`). 그런데 초기 버전은 이미 정규화된 `expression.TPM.m
   진행하면 raw fastq를 못 찾고 전부 SKIP됩니다.
 - `samples.txt`가 개행 없이 끝나면 `while read` 루프가 마지막 줄을
   못 읽어 마지막 샘플이 계속 누락됩니다.
-
-## 알려진 한계 / 주의 (본 대두 프로젝트 기준)
-
-- 12품종 중 CMJ076 rep1: RNA degradation으로 라이브러리 복잡도가 낮아
-  중복필터 후 unique read가 그룹 내 최저 → DE 검출력이 낮음. 추가
-  시퀀싱으로도 개선이 제한적일 수 있음(QC 단계에서 제외 검토 대상).
-- CMJ032 rep2: W582와 이상 상관을 보여 sample swap 의심 → 클러스터링
-  QC(PtR 상관 히트맵)에서 재점검 필요.
-- 같은 종 + 종자 조직(저장단백질 고발현) 특성상 PCA에서 품종 간 분리가
-  흐릿하게 나오는 것은 자연스러운 현상. replicate 응집도와 outlier
-  여부를 우선 확인할 것.
 
 ## 주요 산출물 (modules/ 최종)
 
